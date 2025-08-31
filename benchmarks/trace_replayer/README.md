@@ -258,6 +258,6 @@ The benchmark outputs:
 ## Troubleshooting
 
 - **Connection Errors**: Ensure the LLM server is running and the `base_url` in `config.yaml` is correct.
-- **`FileNotFoundError`**: Make sure the `trace_file` specified in `replay_config` exists. You may need to run in `generate` mode first.
+- **`FileNotFoundError`**: Make sure the `trace_file` specified in `replay_config` exists inside the directory specified by `trace_dir`. You may need to run in `generate` mode first.
 - **YAML Errors**: Check `config.yaml` for syntax errors.
 - **Memory Issues**: If you encounter out-of-memory errors, try reducing `num_requests` or `duration` in your generation config.
