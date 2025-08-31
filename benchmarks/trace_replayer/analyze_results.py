@@ -13,11 +13,10 @@ from pathlib import Path
 import seaborn as sns
 import yaml
 
-def load_results(pattern="*.csv"):
-    """Load all CSV result files matching the pattern"""
-    files = glob.glob(pattern)
+def load_results(files):
+    """Load all CSV result files from a list of files"""
     if not files:
-        print(f"No files found matching pattern: {pattern}")
+        print(f"No files found to load.")
         return None
     
     results = {}
@@ -227,9 +226,17 @@ def main():
     dir_config = config.get('directories', {})
     summary_dir = dir_config.get('summary_dir', 'summaries')
     
+    # Handle file patterns
+    if "," in args.pattern:
+        # Handle comma-separated list of files
+        files_to_load = [str(Path(summary_dir) / f.strip()) for f in args.pattern.split(',')]
+    else:
+        # Handle glob pattern
+        search_pattern = str(Path(summary_dir) / args.pattern)
+        files_to_load = glob.glob(search_pattern)
+
     # Load results
-    search_pattern = str(Path(summary_dir) / args.pattern)
-    results = load_results(search_pattern)
+    results = load_results(files_to_load)
     if not results:
         return
     

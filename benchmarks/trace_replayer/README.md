@@ -99,7 +99,7 @@ Use the `analyze_results.py` script to compare different runs (e.g., baseline vs
 
 ```bash
 # Compare two specific result files
-python analyze_results.py --pattern "baseline_results.csv,lmcache_results.csv" --plot
+python analyze_results.py --pattern "baseline.csv,lmcache.csv" --plot
 
 # Or use a glob pattern to compare all recent runs
 python analyze_results.py --pattern "summary-*.csv" --plot
