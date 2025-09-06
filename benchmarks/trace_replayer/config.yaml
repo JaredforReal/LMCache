@@ -1,47 +1,16 @@
-# LMCache Benchmark Tool Configuration
-
-# Execution mode: 'generate' or 'replay'
-mode: replay
-
-# Directory Configuration
-directories:
-  trace_dir: "traces"
-  summary_dir: "summaries"
+# LMCache Trace Replayer Configuration
 
 # LLM Server Configuration
 server:
   base_url: "http://localhost:8000/v1"
   api_key: "EMPTY"
-  model: "meta-llama/Llama-3.1-8B-Instruct"
+  model: "llama-3-Instruct"
 
-# Trace Replay Configuration (used when mode is 'replay')
+# Trace Replay Configuration
 replay_config:
-  # Filename of the trace to be replayed (will be looked for in `trace_dir`)
-  trace_file: "trace.jsonl"
+  # Filename of the trace to be replayed (relative to current directory)
+  trace_file: "test_chat_trace.jsonl"
   # Maximum duration of the replay in seconds
   max_duration: 60.0
-
-# Trace Generation Configuration (used when mode is 'generate')
-generate_config:
-  # Output filename for the generated trace (will be saved in `trace_dir`)
-  output_file: "trace.jsonl"
-
-  # Generation mode: 'synthetic', 'sharegpt', or 'cache-focused'
-  generation_mode: "synthetic"
-
-  # Random seed for reproducibility
-  seed: 42
-
-  # --- Parameters for 'synthetic', 'sharegpt', and 'cache-focused' modes ---
-  # Total number of requests to generate
-  num_requests: 100
-  # Total duration of the trace in seconds (requests will be spread over this time)
-  duration: 60.0
-
-  # --- Parameters for 'sharegpt' mode ---
-  # Path to the input ShareGPT-formatted JSON file
-  input_file: "sharegpt_data.json" # Required if generation_mode is 'sharegpt'
-
-  # --- Parameters for 'cache-focused' mode ---
-  # Target cache hit ratio (e.g., 0.6 for 60% hits)
-  cache_hit_ratio: 0.7
+  # Output CSV filename (default: summary.csv)
+  output_file: "summary.csv"
