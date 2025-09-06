@@ -1,20 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
+# Standard
+from pathlib import Path
+from typing import Any, List, Optional, TextIO, Union
 import argparse
 import asyncio
 import csv
 import json
 import logging
 import time
-import yaml
-from pathlib import Path
-from typing import List, Union, Optional, Any, TextIO
-import openai
+
+# Third Party
 from pydantic import BaseModel, Field
 
 # 导入生产版 API Server 支持的核心请求类型
 from vllm.entrypoints.openai.protocol import ChatCompletionRequest
+import openai
+import yaml
 
 
 class TraceRequest(BaseModel):
@@ -25,27 +28,34 @@ class TraceRequest(BaseModel):
 
     timestamp: float = Field(
         ...,
-        description=
-        "Timestamp of when the request was received, in seconds since epoch. Essential for replaying traffic with original timing."
+        description=(
+            "Timestamp of when the request was received, in seconds since "
+            "epoch. Essential for replaying traffic with original timing."
+        ),
     )
 
     method: str = Field(..., description="The HTTP method, e.g., 'POST'.")
 
     url: str = Field(
         ...,
-        description=
-        "The request URL path, e.g., '/v1/chat/completions'. Crucial for directing the replayed request to the correct endpoint."
+        description=(
+            "The request URL path, e.g., '/v1/chat/completions'. Crucial "
+            "for directing the replayed request to the correct endpoint."
+        ),
     )
 
     body: Union[ChatCompletionRequest, dict, Any] = Field(
         ...,
-        description=
-        "The request payload, parsed into the corresponding Pydantic model. This is the core content needed for the model to process the request."
+        description=(
+            "The request payload, parsed into the corresponding Pydantic "
+            "model. This is the core content needed for the model to "
+            "process the request."
+        ),
     )
 
     request_id: str = Field(
         ...,
-        description="A unique ID for this request in the trace for easier tracking."
+        description=("A unique ID for this request in the trace for easier tracking."),
     )
 
 
@@ -53,6 +63,7 @@ class TraceMetadata(BaseModel):
     """
     Metadata about the trace file.
     """
+
     # Version of the trace format.
     trace_version: str = "0.1"
 
@@ -75,6 +86,7 @@ class RequestResult(BaseModel):
     """
     Result of a single request execution.
     """
+
     request_id: str
     ttft: float  # Time to first token
     input_token_len: int
@@ -88,7 +100,10 @@ class RequestResult(BaseModel):
 OUTPUT_FILENAME = "summary.csv"
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 
@@ -104,9 +119,7 @@ class TraceReplayer:
         enable_retry: bool = False,
     ):
         self.client = openai.AsyncOpenAI(
-            api_key=api_key, 
-            base_url=base_url,
-            timeout=request_timeout
+            api_key=api_key, base_url=base_url, timeout=request_timeout
         )
         self.model = model
         self.max_duration = max_duration
@@ -124,44 +137,50 @@ class TraceReplayer:
             with open(trace_file, "r", encoding="utf-8") as f:
                 line_num = 0
                 start_timestamp = None
-                
+
                 for line in f:  # Stream line by line instead of reading all at once
                     line_num += 1
                     line = line.strip()
                     if not line:
                         continue
-                        
+
                     try:
                         data = json.loads(line)
-                        
-                        # Skip metadata line (contains trace_version, created_at, etc)
+
+                        # Skip metadata line (contains trace_version, etc)
                         if "trace_version" in data or "created_at" in data:
-                            logger.info(f"Found trace metadata: version={data.get('trace_version', 'unknown')}")
+                            logger.info(
+                                f"Found trace metadata: "
+                                f"version={data.get('trace_version', 'unknown')}"
+                            )
                             continue
-                        
+
                         # Parse request data
                         timestamp = float(data["timestamp"])
-                        
+
                         # Track start timestamp for duration filtering
                         if start_timestamp is None:
                             start_timestamp = timestamp
-                        
+
                         # Filter by max_duration early to save memory
-                        if self.max_duration > 0 and (timestamp - start_timestamp) > self.max_duration:
+                        if (
+                            self.max_duration > 0
+                            and (timestamp - start_timestamp) > self.max_duration
+                        ):
                             break
-                        
+
                         # Only support Chat Completions for MVP
                         url = data["url"]
                         if not url.endswith("/chat/completions"):
                             logger.debug(f"Skipping unsupported endpoint: {url}")
                             continue
-                        
+
                         request = TraceRequest(
                             timestamp=timestamp,
                             method=data["method"],
                             url=url,
                             body=data["body"],
-                            request_id=data["request_id"]
+                            request_id=data["request_id"],
                         )
                         requests.append(request)
 
@@ -171,7 +190,7 @@ class TraceReplayer:
 
             # Sort by timestamp (should already be sorted in most cases)
             requests.sort(key=lambda x: x.timestamp)
-            
+
             # Normalize timestamps to start from 0
             if requests and start_timestamp is not None:
                 for req in requests:
@@ -234,39 +253,42 @@ class TraceReplayer:
         for attempt in range(max_retries):
             try:
                 # Use model_dump(exclude_unset=True) for optimal parameter handling
-                if hasattr(request.body, 'model_dump'):
+                if hasattr(request.body, "model_dump"):
                     body_dict = request.body.model_dump(exclude_unset=True)
-                elif hasattr(request.body, 'dict'):
+                elif hasattr(request.body, "dict"):
                     # Compatibility with older pydantic versions
                     body_dict = request.body.dict(exclude_unset=True)
                 else:
-                    body_dict = request.body.copy() if isinstance(request.body, dict) else request.body
+                    body_dict = (
+                        request.body.copy()
+                        if isinstance(request.body, dict)
+                        else request.body
+                    )
 
                 # Override model if not specified or use our configured model
-                if 'model' not in body_dict or not body_dict['model']:
-                    body_dict['model'] = self.model
+                if "model" not in body_dict or not body_dict["model"]:
+                    body_dict["model"] = self.model
 
                 # Ensure streaming for TTFT measurement
-                body_dict['stream'] = True
+                body_dict["stream"] = True
                 # Remove conflicting parameters
-                body_dict.pop('stream_options', None)
-                
+                body_dict.pop("stream_options", None)
+
                 # Only support Chat Completions endpoint
                 if not request.url.endswith("/chat/completions"):
                     raise ValueError(f"Unsupported endpoint: {request.url}")
-                
+
                 response = await self.client.chat.completions.create(
-                    **body_dict,
-                    stream_options={"include_usage": True}
+                    **body_dict, stream_options={"include_usage": True}
                 )
-                
+
                 async for chunk in response:
                     if chunk.choices and chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
                         if first_token_time is None and content.strip():
                             first_token_time = time.monotonic()
                         response_content += content
-                    
+
                     # Get token counts from final chunk with usage info
                     if hasattr(chunk, "usage") and chunk.usage:
                         input_tokens = chunk.usage.prompt_tokens
@@ -290,22 +312,34 @@ class TraceReplayer:
                 return result
 
             except asyncio.TimeoutError:
-                logger.warning(f"Request {request.request_id} timed out (attempt {attempt + 1}/{max_retries})")
+                logger.warning(
+                    f"Request {request.request_id} timed out "
+                    f"(attempt {attempt + 1}/{max_retries})"
+                )
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
                 continue
             except openai.RateLimitError as e:
-                logger.warning(f"Rate limit error for {request.request_id} (attempt {attempt + 1}/{max_retries}): {e}")
+                logger.warning(
+                    f"Rate limit error for {request.request_id} "
+                    f"(attempt {attempt + 1}/{max_retries}): {e}"
+                )
                 if attempt < max_retries - 1:
                     await asyncio.sleep(5)  # Wait longer for rate limits
                 continue
             except openai.APIConnectionError as e:
-                logger.warning(f"Connection error for {request.request_id} (attempt {attempt + 1}/{max_retries}): {e}")
+                logger.warning(
+                    f"Connection error for {request.request_id} "
+                    f"(attempt {attempt + 1}/{max_retries}): {e}"
+                )
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(2**attempt)
                 continue
             except Exception as e:
-                logger.error(f"Request {request.request_id} failed (attempt {attempt + 1}/{max_retries}): {e}")
+                logger.error(
+                    f"Request {request.request_id} failed "
+                    f"(attempt {attempt + 1}/{max_retries}): {e}"
+                )
                 if attempt < max_retries - 1:
                     await asyncio.sleep(1)
                 continue
@@ -324,7 +358,12 @@ class TraceReplayer:
         self.write_result_to_csv(result)
         return result
 
-    async def replay_trace(self, requests: List[TraceRequest], summary_dir: str = ".", output_filename: str = None):
+    async def replay_trace(
+        self,
+        requests: List[TraceRequest],
+        summary_dir: str = ".",
+        output_filename: Optional[str] = None,
+    ):
         """Replay trace requests maintaining relative timing"""
         if not requests:
             logger.warning("No requests to replay")
@@ -343,12 +382,13 @@ class TraceReplayer:
 
         logger.info(
             f"Starting trace replay with {len(requests)} requests "
-            f"over {self.max_duration}s (max concurrent: {self.max_concurrent})"
+            f"over {self.max_duration}s "
+            f"(max concurrent: {self.max_concurrent})"
         )
 
         # Use semaphore to control concurrency
         semaphore = asyncio.Semaphore(self.max_concurrent)
-        
+
         async def send_with_semaphore(req):
             async with semaphore:
                 return await self.send_request(req)
@@ -359,7 +399,7 @@ class TraceReplayer:
             for i, request in enumerate(requests):
                 # Calculate relative delay from trace start
                 relative_delay = request.timestamp - base_timestamp
-                
+
                 # Wait until it's time to send this request
                 target_time = start_time + relative_delay
                 current_time = time.monotonic()
@@ -373,7 +413,7 @@ class TraceReplayer:
                 logger.info(
                     f"Launched request {request.request_id} at "
                     f"{relative_delay:.2f}s (endpoint: {request.url}) "
-                    f"[{i+1}/{len(requests)}]"
+                    f"[{i + 1}/{len(requests)}]"
                 )
 
             logger.info("All requests launched, waiting for completion...")
@@ -382,7 +422,7 @@ class TraceReplayer:
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=self.max_duration + 60  # Extra time for completion
+                    timeout=self.max_duration + 60,  # Extra time
                 )
             except asyncio.TimeoutError:
                 logger.warning("Some requests did not complete within timeout")
@@ -400,15 +440,17 @@ class TraceReplayer:
             try:
                 await asyncio.wait_for(
                     asyncio.gather(*tasks, return_exceptions=True),
-                    timeout=5.0
+                    timeout=5.0,
                 )
             except asyncio.TimeoutError:
                 logger.warning("Some requests did not cancel gracefully")
-        
+
         finally:
             self.close_csv()
-            logger.info(f"Trace replay finished. Results saved to {self.summary_filename}")
-            
+            logger.info(
+                f"Trace replay finished. Results saved to {self.summary_filename}"
+            )
+
     def print_summary(self):
         """Print performance summary from CSV data"""
         if not self.summary_filename:
@@ -470,7 +512,10 @@ def setup_arg_parser():
     """Sets up the argument parser."""
     parser = argparse.ArgumentParser(description="LMCache Benchmark Tool")
     parser.add_argument(
-        "--config", type=str, default="config.yaml", help="Configuration file path"
+        "--config",
+        type=str,
+        default="config.yaml",
+        help="Configuration file path",
     )
     parser.add_argument(
         "--trace_file", type=str, help="Override trace file from config"
@@ -478,9 +523,7 @@ def setup_arg_parser():
     parser.add_argument(
         "--max_duration", type=float, help="Override max duration from config"
     )
-    parser.add_argument(
-        "--output", type=str, help="Override output file from config"
-    )
+    parser.add_argument("--output", type=str, help="Override output file from config")
     return parser
 
 
@@ -539,7 +582,9 @@ async def main():
         return
 
     # Replay the trace (use custom output filename if specified)
-    await replayer.replay_trace(requests, summary_dir=summary_dir, output_filename=output_filename)
+    await replayer.replay_trace(
+        requests, summary_dir=summary_dir, output_filename=output_filename
+    )
 
     # Print summary
     replayer.print_summary()
