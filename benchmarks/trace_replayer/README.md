@@ -1,263 +1,263 @@
-# LMCache Trace Replayer & Generator Benchmark
+# LMCache Trace Replayer
 
-## Overview
-
-This benchmark is a unified tool designed to simulate realistic LLM workloads for performance evaluation, especially for caching systems like LMCache. It integrates both trace data generation and trace replaying into a single, configuration-driven script (`benchmark.py`).
-
-Instead of using simplistic, repetitive prompts, this tool generates and replays diverse, conversational data to provide a more accurate assessment of an LLM server's performance under real-world conditions.
+A lightweight tool for replaying LLM request traces to benchmark server performance, particularly for testing caching systems like LMCache.
 
 ## Features
 
-- **Unified Workflow**: Generate trace data and replay it using a single script and configuration file.
-- **Configuration-Driven**: Easily switch between modes and parameters by editing `config.yaml`.
-- **Realistic Data Generation**: Supports multiple generation modes:
-  - `synthetic`: General-purpose conversational data.
-  - `cache-focused`: Data specifically designed to test prefix caching effectiveness (e.g., for RAG).
-  - `sharegpt`: Convert real-world ShareGPT datasets into a replayable trace.
-- **Accurate Replay**: Replays requests while maintaining the original timing and arrival patterns of the trace.
-- **Real-time Results**: Outputs detailed performance metrics to a CSV file during execution for live monitoring.
-- **Analysis Script**: Includes a separate script (`analyze_results.py`) to compare and visualize results from different benchmark runs.
+- **Multi-endpoint Support**: `/v1/chat/completions`, `/v1/completions`, and `/v1/embeddings`
+- **Accurate Timing**: Maintains original request timing and arrival patterns
+- **Real-time Metrics**: Outputs detailed performance metrics to CSV
+- **Simple Configuration**: YAML-based configuration
 
 ## Quick Start
 
-The entire benchmark workflow is controlled by `benchmark.py` and `config.yaml`.
+### 1. Install Dependencies
 
-### 1. Configure `config.yaml`
+```bash
+pip install openai pydantic pyyaml pandas
+```
 
-First, open `config.yaml` and set it up for your desired task.
+### 2. Configure the Tool
 
-**Example: To generate a cache-focused trace:**
+Edit `config.yaml`:
 
 ```yaml
-# In config.yaml
-mode: generate
-
-generate_config:
-  output_file: "cache_trace.jsonl"
-  generation_mode: "cache-focused"
-  num_requests: 200
-  duration: 120.0
-  cache_hit_ratio: 0.7
-  seed: 42
-```
-
-**Example: To replay the generated trace:**
-
-```yaml
-# In config.yaml
-mode: replay
-
-server:
-  base_url: "http://localhost:8000/v1"
-  model: "meta-llama/Llama-3.1-8B-Instruct"
-
-replay_config:
-  trace_file: "cache_trace.jsonl"
-  max_duration: 120.0
-```
-
-_(See the "Configuration (`config.yaml`)" section below for a full explanation of all options.)_
-
-### 2. Start the LLM Server
-
-Choose one of the following options.
-
-**Baseline (vLLM without caching):**
-
-```bash
-vllm serve meta-llama/Llama-3.1-8B-Instruct --port 8000
-```
-
-**With LMCache:**
-
-```bash
-cd LMCache/benchmarks/trace_replayer/
-
-LMCACHE_CONFIG_FILE=lmcache.yaml vllm serve meta-llama/Llama-3.1-8B-Instruct \
-    --port 8000 \
-    --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1", "kv_role":"kv_both"}'
-```
-
-### 3. Run the Benchmark
-
-Execute the main script. It will automatically pick up the settings from `config.yaml`.
-
-```bash
-# This one command runs either generation or replay based on the 'mode' in config.yaml
-python benchmark.py
-```
-
-The script will:
-
-1. Read `config.yaml`.
-2. If `mode` is `generate`, it creates the trace file.
-3. If `mode` is `replay`, it connects to the LLM server, replays the specified trace, and saves results to a new `summary-*.csv` file.
-
-### 4. Analyze the Results
-
-Use the `analyze_results.py` script to compare different runs (e.g., baseline vs. LMCache).
-
-```bash
-# Compare two specific result files
-python analyze_results.py --pattern "baseline.csv,lmcache.csv" --plot
-
-# Or use a glob pattern to compare all recent runs
-python analyze_results.py --pattern "summary-*.csv" --plot
-```
-
-This will print a detailed performance comparison to the console and save visualization plots (like TTFT distribution) to the `plots/` directory.
-
-## Configuration (`config.yaml`)
-
-This file is the control center for the benchmark.
-
-```yaml
-# LMCache Benchmark Tool Configuration
-
-# Execution mode: 'generate' or 'replay'
-mode: replay
-
-# Directory Configuration
-directories:
-  trace_dir: "traces"
-  summary_dir: "summaries"
-
-# LLM Server Configuration
 server:
   base_url: "http://localhost:8000/v1"
   api_key: "EMPTY"
   model: "meta-llama/Llama-3.1-8B-Instruct"
 
-# Trace Replay Configuration (used when mode is 'replay')
 replay_config:
-  # Filename of the trace to be replayed (will be looked for in `trace_dir`)
-  trace_file: "trace.jsonl"
-  # Maximum duration of the replay in seconds
+  trace_file: "test_basic_trace.jsonl"
   max_duration: 60.0
-
-# Trace Generation Configuration (used when mode is 'generate')
-generate_config:
-  # Output filename for the generated trace (will be saved in `trace_dir`)
-  output_file: "trace.jsonl"
-
-  # Generation mode: 'synthetic', 'sharegpt', or 'cache-focused'
-  generation_mode: "synthetic"
-...
-- `is_success`: Whether the request completed successfully.
-
-## Troubleshooting
-
-- **Connection Errors**: Ensure the LLM server is running and the `base_url` in `config.yaml` is correct.
-- **`FileNotFoundError`**: Make sure the `trace_file` specified in `replay_config` exists inside the directory specified by `trace_dir`. You may need to run in `generate` mode first.
-- **YAML Errors**: Check `config.yaml` for syntax errors.
-- **Memory Issues**: If you encounter out-of-memory errors, try reducing `num_requests` or `duration` in your generation config.
-
-
-  # Random seed for reproducibility
-  seed: 42
-
-  # --- Parameters for 'synthetic', 'sharegpt', and 'cache-focused' modes ---
-  num_requests: 100
-  duration: 60.0
-
-  # --- Parameters for 'sharegpt' mode ---
-  # Path to the input ShareGPT-formatted JSON file
-  input_file: "sharegpt_data.json" # Required if generation_mode is 'sharegpt'
-
-  # --- Parameters for 'cache-focused' mode ---
-  # Target cache hit ratio (e.g., 0.7 for 70% hits)
-  cache_hit_ratio: 0.7
 ```
 
-## Benchmarking LMCache Effectiveness
+### 3. Start LLM Server
 
-To properly evaluate LMCache, follow these steps:
+**Baseline (vLLM only):**
+```bash
+vllm serve meta-llama/Llama-3.1-8B-Instruct --port 8000
+```
 
-### Step 1: Generate a Cache-Focused Trace
+**With LMCache:**
+```bash
+LMCACHE_CONFIG_FILE=lmcache.yaml vllm serve meta-llama/Llama-3.1-8B-Instruct 
+    --port 8000 
+    --kv-transfer-config '{"kv_connector":"LMCacheConnectorV1", "kv_role":"kv_both"}'
+```
 
-Configure `config.yaml` to generate a trace designed to test caching.
+### 4. Run the Replayer
+
+```bash
+python trace_replayer.py --config config.yaml
+```
+
+## Usage Examples
+
+### Basic Usage
+```bash
+# Use default config.yaml
+python trace_replayer.py
+
+# Specify custom config
+python trace_replayer.py --config my_config.yaml
+
+# Override trace file
+python trace_replayer.py --trace_file custom_trace.jsonl
+
+# Set maximum duration
+python trace_replayer.py --max_duration 30
+
+# Override output file
+python trace_replayer.py --output custom_results.csv
+
+# Combine multiple overrides
+python trace_replayer.py --config my_config.yaml --trace_file custom.jsonl --output results.csv
+```
+
+### Analyzing Results with Python
+```python
+import pandas as pd
+
+# Load results
+df = pd.read_csv('summary.csv')
+
+# Calculate basic metrics
+success_rate = df['is_success'].mean()
+avg_ttft = df[df['is_success']]['ttft'].mean()
+total_requests = len(df)
+
+print(f"Success Rate: {success_rate:.1%}")
+print(f"Average TTFT: {avg_ttft:.3f}s")
+print(f"Total Requests: {total_requests}")
+
+# Analyze by endpoint
+endpoint_stats = df.groupby('endpoint').agg({
+    'ttft': 'mean',
+    'is_success': 'mean',
+    'input_token_len': 'mean',
+    'output_token_len': 'mean'
+}).round(3)
+print(endpoint_stats)
+```
+
+### Benchmarking Workflow
+```bash
+# 1. Run baseline (no caching)
+python trace_replayer.py --config baseline_config.yaml
+mv summary.csv baseline_results.csv
+
+# 2. Run with LMCache
+python trace_replayer.py --config lmcache_config.yaml  
+mv summary.csv lmcache_results.csv
+
+# 3. Compare results
+python -c "
+import pandas as pd
+baseline = pd.read_csv('baseline_results.csv')
+lmcache = pd.read_csv('lmcache_results.csv')
+
+print('Baseline TTFT:', baseline[baseline['is_success']]['ttft'].mean())
+print('LMCache TTFT:', lmcache[lmcache['is_success']]['ttft'].mean())
+print('Improvement:', 
+      (baseline[baseline['is_success']]['ttft'].mean() - 
+       lmcache[lmcache['is_success']]['ttft'].mean()) / 
+       baseline[baseline['is_success']]['ttft'].mean() * 100, '%')
+"
+```
+
+## Trace File Format
+
+The trace file must be in JSONL (JSON Lines) format following the `VllmTrace` specification:
+
+### Format Requirements
+
+1. **First line**: Metadata object with trace information
+2. **Subsequent lines**: Individual request objects, one per line
+3. **File extension**: `.jsonl`
+4. **Encoding**: UTF-8
+
+### Required Fields
+
+**Metadata line (first line)**:
+```json
+{"trace_version": "0.1", "created_at": "2025-09-06T12:00:00Z", "description": "Optional description"}
+```
+
+**Request lines**:
+```json
+{"timestamp": 1725624000.0, "method": "POST", "url": "/v1/chat/completions", "body": {...}, "request_id": "req-001"}
+```
+
+### Field Specifications
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `timestamp` | float | Yes | Unix timestamp in seconds (with decimals) |
+| `method` | string | Yes | HTTP method, typically "POST" |
+| `url` | string | Yes | API endpoint path |
+| `body` | object | Yes | Complete request payload |
+| `request_id` | string | Yes | Unique identifier for the request |
+
+### Example Complete Trace File
+
+```jsonl
+{"trace_version": "0.1", "created_at": "2025-09-06T12:00:00Z", "description": "Test trace"}
+{"timestamp": 1725624000.0, "method": "POST", "url": "/v1/chat/completions", "body": {"model": "my-model", "messages": [{"role": "user", "content": "Hello"}]}, "request_id": "req-001"}
+{"timestamp": 1725624000.5, "method": "POST", "url": "/v1/completions", "body": {"model": "my-model", "prompt": "Hello"}, "request_id": "req-002"}
+{"timestamp": 1725624001.0, "method": "POST", "url": "/v1/embeddings", "body": {"model": "my-model", "input": "Hello"}, "request_id": "req-003"}
+```
+
+### Supported Endpoints
+
+- `/v1/chat/completions` - Chat-style conversations
+- `/v1/completions` - Text completion
+- `/v1/embeddings` - Text embeddings
+
+### Timing and Order
+
+- Requests are replayed based on relative timestamps
+- First request starts at time 0, others follow relative delays
+- Original timestamp values are preserved for reference
+
+## Output Metrics
+
+The CSV output contains per-request metrics:
+
+| Column | Description |
+|--------|-------------|
+| `request_id` | Request identifier |
+| `ttft` | Time to First Token (seconds) |
+| `input_token_len` | Input tokens count |
+| `output_token_len` | Output tokens count |
+| `launch_time` | Request start timestamp |
+| `finish_time` | Request end timestamp |
+| `is_success` | Request completion status |
+
+## Configuration Options
 
 ```yaml
-# config.yaml
-mode: generate
-generate_config:
-  output_file: "cache_test_trace.jsonl"
-  generation_mode: "cache-focused"
-  num_requests: 200
-  duration: 120.0
-  cache_hit_ratio: 0.8
+# Server connection
+server:
+  base_url: "http://localhost:8000/v1"
+  api_key: "EMPTY"        # Use "EMPTY" for local vLLM
+  model: "meta-llama/Llama-3.1-8B-Instruct"
+
+# Replay settings
+replay_config:
+  trace_file: "test_basic_trace.jsonl"
+  max_duration: 60.0      # Stop after N seconds
+  output_file: "summary.csv"  # Output CSV filename
+
+# Advanced settings (optional)
+advanced:
+  request_timeout: 30.0   # Request timeout in seconds
+  max_concurrent: 10      # Max concurrent requests
+  enable_retry: false     # Enable retry on failures
 ```
-
-Run the script to create the trace file:
-
-```bash
-python benchmark.py
-```
-
-### Step 2: Run Baseline (No Caching)
-
-1.  Start the vLLM server **without** LMCache.
-2.  Configure `config.yaml` to replay the trace.
-    ```yaml
-    # config.yaml
-    mode: replay
-    replay_config:
-      trace_file: "cache_test_trace.jsonl"
-    ```
-3.  Run the benchmark.
-    ```bash
-    python benchmark.py
-    ```
-4.  Rename the output file for clarity.
-    ```bash
-    mv summary-*.csv baseline_results.csv
-    ```
-
-### Step 3: Run with LMCache
-
-1.  Stop the baseline server and restart it **with** LMCache enabled.
-2.  Using the same `config.yaml` as Step 2, run the benchmark again.
-    ```bash
-    python benchmark.py
-    ```
-3.  Rename the new output file.
-    ```bash
-    mv summary-*.csv lmcache_results.csv
-    ```
-
-### Step 4: Compare Results
-
-Use the analysis script to see the performance difference.
-
-```bash
-python analyze_results.py --pattern "baseline_results.csv,lmcache_results.csv" --plot
-```
-
-Look for:
-
-- **Lower TTFT (Time to First Token)** with LMCache.
-- **Higher Throughput (req/s and tokens/s)** with LMCache.
-
-## Output and Analysis
-
-The benchmark outputs:
-
-1.  **Trace File (`.jsonl`)**: If `mode` is `generate`.
-2.  **Results CSV (`summary-*.csv`)**: If `mode` is `replay`. Contains per-request metrics.
-3.  **Console Summary**: A summary is printed to the console after a replay finishes.
-4.  **Analysis Plots**: The `analyze_results.py` script generates plots in the `plots/` directory.
-
-**CSV Columns:**
-
-- `chat_id`: Unique request identifier.
-- `ttft`: Time to First Token (in seconds). This is a key metric for user experience.
-- `input_token_len` / `output_token_len`: Number of tokens in the prompt and response.
-- `launch_time` / `finish_time`: Monotonic timestamps for calculating throughput.
-- `is_success`: Whether the request completed successfully.
 
 ## Troubleshooting
 
-- **Connection Errors**: Ensure the LLM server is running and the `base_url` in `config.yaml` is correct.
-- **`FileNotFoundError`**: Make sure the `trace_file` specified in `replay_config` exists inside the directory specified by `trace_dir`. You may need to run in `generate` mode first.
-- **YAML Errors**: Check `config.yaml` for syntax errors.
-- **Memory Issues**: If you encounter out-of-memory errors, try reducing `num_requests` or `duration` in your generation config.
+| Issue | Solution |
+|-------|----------|
+| Connection refused | Check if LLM server is running on specified port |
+| File not found | Verify `trace_file` path in config |
+| YAML parse error | Validate `config.yaml` syntax |
+| Memory issues | Reduce `max_duration` or `concurrent_limit` |
+| SSL errors | Use `http://` instead of `https://` for local servers |
+
+## Command Line Options
+
+```
+usage: trace_replayer.py [-h] [--config CONFIG] [--trace_file TRACE_FILE] 
+                        [--max_duration MAX_DURATION] [--output OUTPUT]
+
+optional arguments:
+  -h, --help            show this help message and exit
+  --config CONFIG       Path to config file (default: config.yaml)
+  --trace_file TRACE_FILE
+                        Override trace file from config
+  --max_duration MAX_DURATION
+                        Override max duration from config
+  --output OUTPUT       Override output file from config
+```
+
+## Real-world Testing
+
+### Start vLLM Server
+```bash
+# In another terminal, start vLLM server
+python -m vllm.entrypoints.openai.api_server --model facebook/opt-350m --port 8001
+```
+
+### Model Compatibility
+- `facebook/opt-350m`: Supports completions API only
+- For embeddings: Use models with embedding support
+- For chat completions: Use chat-tuned models
+
+### Example Test
+```bash
+python trace_replayer.py --config test_config_simple.yaml --trace_file test_clean_trace.jsonl --output results.csv
+```
+
+Expected output: 100% success rate with detailed metrics in CSV format.
