@@ -2,14 +2,14 @@
 
 # LLM Server Configuration
 server:
-  base_url: "http://localhost:8001/v1"
+  base_url: "http://localhost:8000/v1"
   api_key: "EMPTY"
-  model: "meta-llama/Llama-3.1-8B-Instruct"
+  model: "llama-3-Instruct"
 
 # Trace Replay Configuration
 replay_config:
   # Filename of the trace to be replayed (relative to current directory)
-  trace_file: "test_basic_trace.jsonl"
+  trace_file: "test_chat_trace.jsonl"
   # Maximum duration of the replay in seconds
   max_duration: 60.0
   # Output CSV filename (default: summary.csv)
