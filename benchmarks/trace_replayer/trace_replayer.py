@@ -14,7 +14,7 @@ import time
 # Third Party
 from pydantic import BaseModel, Field
 
-# 导入生产版 API Server 支持的核心请求类型
+# Import core request types supported by the production API server
 from vllm.entrypoints.openai.protocol import ChatCompletionRequest
 import openai
 import yaml
